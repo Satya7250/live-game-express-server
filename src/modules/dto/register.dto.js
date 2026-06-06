@@ -11,7 +11,7 @@ class RegisterDto extends BaseDto {
       "string.min": "Password must contain 8 char minimum",
     }),
 
-    role: Joi.string().valid("customer", "seller").default("customer"),
+    role: Joi.string().valid("player","developer").default("player"),
 
     phone: Joi.string().trim().allow(null),
 
