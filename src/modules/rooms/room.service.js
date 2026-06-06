@@ -110,7 +110,18 @@ const getRoomByCode = async (roomCode) => {
     return room;
 };
 
-//get my rooms
+//get all rooms for a user (no pagination, for disconnect cleanup)
+const getRoomsForUser = async (userId) => {
+    const rooms = await Room.find({
+        $or: [
+            { owner: userId },
+            { players: userId },
+        ],
+    }).select("roomCode");
+    return rooms;
+};
+
+//get my rooms (paginated, for API)
 const getMyRooms = async (userId, page = 1, limit = 20) => {
     const skip = (page - 1) * limit;
     const rooms = await Room.find({
@@ -175,4 +186,5 @@ export {
     getRoomByCode,
     getMyRooms,
     startRoom,
+    getRoomsForUser,
 };

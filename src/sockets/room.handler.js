@@ -1,11 +1,12 @@
 import * as roomService from "../modules/rooms/room.service.js";
 import Room from "../modules/rooms/room.model.js";
+import { activeGames } from "./activeGames.js";
 
 const registerRoomHandlers = (io, socket) => {
     const userId = socket.user?.id;
     if (!userId) return;
 
-    //create room via socket
+    // Create room
     socket.on("room:create", async (data) => {
         try {
             const room = await roomService.createRoom(userId, data);
@@ -20,7 +21,7 @@ const registerRoomHandlers = (io, socket) => {
         }
     });
 
-    //join room via socket
+    // Join room
     socket.on("room:join", async (data) => {
         try {
             const { roomCode } = data;
@@ -36,32 +37,39 @@ const registerRoomHandlers = (io, socket) => {
         }
     });
 
-    //leave room via socket
+    // Leave room
     socket.on("room:leave", async (data) => {
         try {
             const { roomCode } = data;
+            const roomKey = `room:${roomCode}`;
             const result = await roomService.leaveRoom(userId, roomCode);
-            socket.leave(`room:${roomCode}`);
-            socket.emit("room:left", { result });
-            if (!result.message) {
+
+            // Clean up active game if room is empty
+            if (result.message) {
+                if (activeGames.has(roomKey)) {
+                    activeGames.delete(roomKey);
+                    io.to(roomKey).emit("ttt:gameEnded", { reason: "room_deleted" });
+                }
+            } else {
+                // Update remaining players
                 const room = await Room.findOne({ roomCode })
                     .populate("owner", "name avatar")
                     .populate("players", "name avatar");
-                io.to(`room:${roomCode}`).emit("room:updated", { room });
+                io.to(roomKey).emit("room:updated", { room });
             }
+
+            socket.leave(roomKey);
+            socket.emit("room:left", { result });
         } catch (error) {
             socket.emit("room:error", { message: error.message });
         }
     });
 
-    //start game via socket
+    // Start game
     socket.on("room:start", async (data) => {
         try {
             const { roomCode } = data;
-            const room = await roomService.startRoom(
-                userId,
-                roomCode
-            );
+            const room = await roomService.startRoom(userId, roomCode);
             const populatedRoom = await Room.findById(room._id)
                 .populate("owner", "name avatar")
                 .populate("players", "name avatar");
