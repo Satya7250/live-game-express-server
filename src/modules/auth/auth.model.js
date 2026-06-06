@@ -18,6 +18,7 @@ const userSchema = new mongoose.Schema(
       required: [true, "Email is required"],
       unique: true,
       lowercase: true,
+      index: true,
     },
 
     password: {
@@ -33,6 +34,7 @@ const userSchema = new mongoose.Schema(
       enum: ["customer", "seller", "admin"],
       default: "customer",
       required: true,
+      index: true,
     },
 
     phone: {
@@ -64,11 +66,13 @@ const userSchema = new mongoose.Schema(
     isVerified: {
       type: Boolean,
       default: false,
+      index: true,
     },
 
     isActive: {
       type: Boolean,
       default: true,
+      index: true,
     },
 
     verificationToken: {

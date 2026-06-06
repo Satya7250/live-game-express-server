@@ -1,43 +1,77 @@
 import Friend from "./friend.model.js";
 import ApiError from "../../common/utils/api-error.js";
+import User from "../auth/auth.model.js";
+import { createNotification } from "../notification/notification.service.js";
+import { NOTIFICATION_TYPES } from "../notification/notification.constants.js";
 
+//send friend request
 const sendFriendRequest = async (senderId, receiverId) => {
     if (senderId === receiverId) {
         throw ApiError.badRequest("Cannot send friend request to yourself");
     }
 
-    const existingRequest = await Friend.findOne({
-        $or: [
-            { sender: senderId, receiver: receiverId },
-            { sender: receiverId, receiver: senderId },
-        ],
-        status: { $in: ["pending", "accepted"] },
-    });
+    const [receiver, sender] = await Promise.all([
+        User.findById(receiverId).select("name").lean(),
+        User.findById(senderId).select("name").lean(),
+    ]);
 
-    if (existingRequest) {
-        if (existingRequest.status === "pending") {
-            throw ApiError.conflict("Friend request already sent");
-        } else if (existingRequest.status === "accepted") {
-            throw ApiError.conflict("Already friends");
-        }
+    if (!receiver) {
+        throw ApiError.notFound("Receiver not found");
     }
 
-    const friendRequest = await Friend.create({
-        sender: senderId,
-        receiver: receiverId,
-    });
+    try {
+        const friendRequest = await Friend.create({
+            sender: senderId,
+            receiver: receiverId,
+        });
 
-    return friendRequest;
+        await createNotification({
+            recipient: receiverId,
+            sender: senderId,
+            type: NOTIFICATION_TYPES.FRIEND_REQUEST,
+            title: "New Friend Request",
+            message: `${sender.name} sent you a friend request`,
+            data: {
+                requestId: friendRequest._id,
+                senderId,
+                receiverId,
+            },
+        });
+
+        return friendRequest;
+    } catch (error) {
+        if (error.code === 11000) {
+            const existing = await Friend.findOne({
+                userPair: { $all: [senderId, receiverId] },
+                status: { $in: ["pending", "accepted"] },
+            })
+                .select("status")
+                .lean();
+
+            if (existing?.status === "pending") {
+                throw ApiError.conflict("Friend request already exists");
+            }
+
+            if (existing?.status === "accepted") {
+                throw ApiError.conflict("Already friends");
+            }
+        }
+
+        throw error;
+    }
 };
 
+//accept friend request
 const acceptFriendRequest = async (requestId, userId) => {
-    const request = await Friend.findById(requestId);
+    const request = await Friend.findById(requestId)
+        .populate("sender", "name");
+
     if (!request) {
         throw ApiError.notFound("Friend request not found");
     }
 
     if (request.receiver.toString() !== userId.toString()) {
-        throw ApiError.forbidden("You are not authorized to accept this request");
+        throw ApiError.forbidden("Not authorized");
     }
 
     if (request.status !== "pending") {
@@ -45,19 +79,39 @@ const acceptFriendRequest = async (requestId, userId) => {
     }
 
     request.status = "accepted";
+
     await request.save();
+
+    const receiver = await User.findById(userId)
+        .select("name")
+        .lean();
+
+    await createNotification({
+        recipient: request.sender._id,
+        sender: userId,
+        type: NOTIFICATION_TYPES.FRIEND_ACCEPTED,
+        title: "Friend Request Accepted",
+        message: `${receiver.name} accepted your friend request`,
+        data: {
+            requestId: request._id,
+            senderId: request.sender._id,
+            receiverId: userId,
+        },
+    });
 
     return request;
 };
 
+//reject friend request
 const rejectFriendRequest = async (requestId, userId) => {
     const request = await Friend.findById(requestId);
+
     if (!request) {
         throw ApiError.notFound("Friend request not found");
     }
 
     if (request.receiver.toString() !== userId.toString()) {
-        throw ApiError.forbidden("You are not authorized to reject this request");
+        throw ApiError.forbidden("Not authorized");
     }
 
     if (request.status !== "pending") {
@@ -65,13 +119,32 @@ const rejectFriendRequest = async (requestId, userId) => {
     }
 
     request.status = "rejected";
+
     await request.save();
+
+    const receiver = await User.findById(userId)
+        .select("name")
+        .lean();
+
+    await createNotification({
+        recipient: request.sender,
+        sender: userId,
+        type: NOTIFICATION_TYPES.FRIEND_REJECTED,
+        title: "Friend Request Rejected",
+        message: `${receiver.name} rejected your friend request`,
+        data: {
+            requestId: request._id,
+            senderId: request.sender,
+            receiverId: userId,
+        },
+    });
 
     return request;
 };
 
+//cancel friend request
 const cancelFriendRequest = async (requestId, userId) => {
-    const request = await Friend.findById(requestId);
+    const request = await Friend.findById(requestId).select("_id sender status").lean();
     if (!request) {
         throw ApiError.notFound("Friend request not found");
     }
@@ -88,13 +161,14 @@ const cancelFriendRequest = async (requestId, userId) => {
     return { message: "Friend request canceled successfully" };
 };
 
+//remove friend
 const removeFriend = async (userId, friendId) => {
     const friendship = await Friend.findOne({
         $or: [
             { sender: userId, receiver: friendId, status: "accepted" },
             { sender: friendId, receiver: userId, status: "accepted" },
         ],
-    });
+    }).select("_id").lean();
 
     if (!friendship) {
         throw ApiError.notFound("Friendship not found");
@@ -104,16 +178,17 @@ const removeFriend = async (userId, friendId) => {
     return { message: "Friend removed successfully" };
 };
 
+//get friend requests
 const getFriendRequests = async (userId) => {
     const requests = await Friend.find({
         receiver: userId,
         status: "pending",
-    }).populate("sender", "name email avatar")
-        .lean();
+    }).populate("sender", "name email avatar").lean();
 
     return requests;
 };
 
+//get sent requests
 const getSentRequests = async (userId) => {
     const requests = await Friend.find({
         sender: userId,
@@ -123,6 +198,7 @@ const getSentRequests = async (userId) => {
     return requests;
 };
 
+//get friends
 const getFriends = async (userId) => {
     const friendships = await Friend.find({
         $or: [
