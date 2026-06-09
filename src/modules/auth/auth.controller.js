@@ -14,19 +14,27 @@ const login = async (req, res, next) => {
   try {
     const { user, accessToken, refreshToken } = await authService.login(req.body);
 
+    const isProduction = process.env.NODE_ENV === "production";
+
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000, //7days
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
-      secure: true,
-      maxAge: 24 * 60 * 60 * 1000, //24hours
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
     });
 
-    ApiResponse.ok(res, "Login successful", { user, accessToken, refreshToken });
+    return ApiResponse.ok(res, "Login successful", {
+      user,
+      accessToken,
+      refreshToken,
+    });
   } catch (error) {
     next(error);
   }
@@ -105,9 +113,13 @@ const refresh = async (req, res, next) => {
 
     const result = await authService.refresh(refreshToken);
 
+    const isProduction =
+      process.env.NODE_ENV === "production";
+
     res.cookie("refreshToken", result.refreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 

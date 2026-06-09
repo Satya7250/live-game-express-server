@@ -8,8 +8,16 @@ import notificationRoutes from "./modules/notification/notification.routes.js";
 import chatRoutes from "./modules/chat/chat.routes.js";
 import roomRoutes from "./modules/rooms/room.routes.js";
 import errorHandler from "./common/middleware/errorHandler.middleware.js";
+import cors from "cors";
 
 const app = express();
+
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 app.use(cookieParser());
