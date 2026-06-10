@@ -3,6 +3,7 @@ import ApiError from "../../common/utils/api-error.js";
 import User from "../auth/auth.model.js";
 import { createNotification } from "../notification/notification.service.js";
 import { NOTIFICATION_TYPES } from "../notification/notification.constants.js";
+import { emitToUser } from "../../common/utils/socket.utils.js";
 
 //send friend request
 const sendFriendRequest = async (senderId, receiverId) => {
@@ -10,12 +11,12 @@ const sendFriendRequest = async (senderId, receiverId) => {
         throw ApiError.badRequest("Cannot send friend request to yourself");
     }
 
-    const [receiver, sender] = await Promise.all([
-        User.findById(receiverId).select("name").lean(),
-        User.findById(senderId).select("name").lean(),
+    const [receiverUser, senderUser] = await Promise.all([
+        User.findById(receiverId).select("_id name email avatar").lean(),
+        User.findById(senderId).select("_id name email avatar").lean(),
     ]);
 
-    if (!receiver) {
+    if (!receiverUser) {
         throw ApiError.notFound("Receiver not found");
     }
 
@@ -30,13 +31,20 @@ const sendFriendRequest = async (senderId, receiverId) => {
             sender: senderId,
             type: NOTIFICATION_TYPES.FRIEND_REQUEST,
             title: "New Friend Request",
-            message: `${sender.name} sent you a friend request`,
+            message: `${senderUser.name} sent you a friend request`,
             data: {
                 requestId: friendRequest._id,
                 senderId,
                 receiverId,
             },
         });
+
+        // Emit socket event to receiver
+        const requestWithSender = {
+            ...friendRequest.toObject(),
+            sender: senderUser,
+        };
+        emitToUser(receiverId, "friend:requestReceived", requestWithSender);
 
         return friendRequest;
     } catch (error) {
@@ -64,7 +72,7 @@ const sendFriendRequest = async (senderId, receiverId) => {
 //accept friend request
 const acceptFriendRequest = async (requestId, userId) => {
     const request = await Friend.findById(requestId)
-        .populate("sender", "name");
+        .populate("sender", "_id name email avatar");
 
     if (!request) {
         throw ApiError.notFound("Friend request not found");
@@ -82,8 +90,8 @@ const acceptFriendRequest = async (requestId, userId) => {
 
     await request.save();
 
-    const receiver = await User.findById(userId)
-        .select("name")
+    const receiverUser = await User.findById(userId)
+        .select("_id name email avatar")
         .lean();
 
     await createNotification({
@@ -91,12 +99,25 @@ const acceptFriendRequest = async (requestId, userId) => {
         sender: userId,
         type: NOTIFICATION_TYPES.FRIEND_ACCEPTED,
         title: "Friend Request Accepted",
-        message: `${receiver.name} accepted your friend request`,
+        message: `${receiverUser.name} accepted your friend request`,
         data: {
             requestId: request._id,
             senderId: request.sender._id,
             receiverId: userId,
         },
+    });
+
+    // Emit socket events
+    // To the original sender (they got a new friend)
+    emitToUser(request.sender._id.toString(), "friend:requestAccepted", {
+        ...request.toObject(),
+        receiver: receiverUser,
+    });
+    
+    // To the receiver (they got a new friend)
+    emitToUser(userId, "friend:requestAccepted", {
+        ...request.toObject(),
+        sender: request.sender,
     });
 
     return request;
@@ -122,7 +143,7 @@ const rejectFriendRequest = async (requestId, userId) => {
 
     await request.save();
 
-    const receiver = await User.findById(userId)
+    const receiverUser = await User.findById(userId)
         .select("name")
         .lean();
 
@@ -131,7 +152,7 @@ const rejectFriendRequest = async (requestId, userId) => {
         sender: userId,
         type: NOTIFICATION_TYPES.FRIEND_REJECTED,
         title: "Friend Request Rejected",
-        message: `${receiver.name} rejected your friend request`,
+        message: `${receiverUser.name} rejected your friend request`,
         data: {
             requestId: request._id,
             senderId: request.sender,
@@ -139,12 +160,17 @@ const rejectFriendRequest = async (requestId, userId) => {
         },
     });
 
+    // Emit socket event to original sender
+    emitToUser(request.sender.toString(), "friend:requestRejected", {
+        requestId: request._id,
+    });
+
     return request;
 };
 
 //cancel friend request
 const cancelFriendRequest = async (requestId, userId) => {
-    const request = await Friend.findById(requestId).select("_id sender status").lean();
+    const request = await Friend.findById(requestId).select("_id sender receiver status").lean();
     if (!request) {
         throw ApiError.notFound("Friend request not found");
     }
@@ -158,6 +184,12 @@ const cancelFriendRequest = async (requestId, userId) => {
     }
 
     await Friend.findByIdAndDelete(requestId);
+    
+    // Emit socket event to the receiver
+    emitToUser(request.receiver.toString(), "friend:requestCanceled", {
+        requestId: request._id,
+    });
+
     return { message: "Friend request canceled successfully" };
 };
 
@@ -175,6 +207,11 @@ const removeFriend = async (userId, friendId) => {
     }
 
     await Friend.findByIdAndDelete(friendship._id);
+    
+    // Emit socket events to both users
+    emitToUser(userId, "friend:removed", { friendId });
+    emitToUser(friendId, "friend:removed", { friendId: userId });
+
     return { message: "Friend removed successfully" };
 };
 
