@@ -55,4 +55,16 @@ roomSchema.index({ owner: 1 });
 roomSchema.index({ players: 1 });
 roomSchema.index({ status: 1 });
 
+// Pre-save hook to prevent duplicate players
+roomSchema.pre("save", function () {
+    // Convert ObjectIds to strings for comparison
+    const uniquePlayers = [
+        ...new Set(this.players.map((playerId) => playerId.toString())),
+    ].map((playerIdStr) => this.players.find(
+        (playerId) => playerId.toString() === playerIdStr
+    ));
+    
+    this.players = uniquePlayers;
+});
+
 export default mongoose.model("Room", roomSchema);

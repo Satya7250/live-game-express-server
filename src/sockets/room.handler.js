@@ -25,10 +25,28 @@ const registerRoomHandlers = (io, socket) => {
     socket.on("room:join", async (data) => {
         try {
             const { roomCode } = data;
-            await roomService.joinRoom(userId, roomCode);
-            const room = await Room.findOne({ roomCode })
+            let room = await Room.findOne({ roomCode })
                 .populate("owner", "name avatar")
                 .populate("players", "name avatar");
+            
+            if (!room) {
+                throw new Error("Room not found");
+            }
+
+            // Check if user is already in the room
+            const isAlreadyInRoom = room.players.some(
+                (player) => player._id.toString() === userId.toString()
+            );
+
+            // If not in room, add them
+            if (!isAlreadyInRoom) {
+                await roomService.joinRoom(userId, roomCode);
+                // Re-fetch the room after joining
+                room = await Room.findOne({ roomCode })
+                    .populate("owner", "name avatar")
+                    .populate("players", "name avatar");
+            }
+
             socket.join(`room:${roomCode}`);
             socket.emit("room:joined", { room });
             io.to(`room:${roomCode}`).emit("room:updated", { room });
