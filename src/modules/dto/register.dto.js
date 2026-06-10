@@ -14,7 +14,7 @@ class RegisterDto extends BaseDto {
     role: Joi.string().valid("player", "developer").default("player"),
 
     phone: Joi.string().trim().allow("", null),
-    avatar: Joi.string().trim().allow("", null),
+    avatar: Joi.string().trim().uri().allow("", null),
     address: Joi.string().trim().max(100).allow("", null),
     bio: Joi.string().trim().max(100).allow("", null),
   });

@@ -4,6 +4,7 @@ import http from "http";
 import app from "./src/app.js";
 import connectDB from "./src/common/config/db.js";
 import { initializeSocket } from "./src/common/config/socket.js";
+import "./src/common/config/cloudinary.js";
 
 const PORT = process.env.PORT || 5000;
 

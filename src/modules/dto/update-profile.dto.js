@@ -7,7 +7,7 @@ class UpdateProfileDto extends BaseDto {
 
     phone: Joi.string().trim().allow(null),
 
-    avatar: Joi.string().trim().allow(null),
+    avatar: Joi.string().trim().uri().allow(null),
 
     address: Joi.string().trim().max(100).allow(null),
 
