@@ -120,29 +120,47 @@ const login = async ({ email, password }) => {
 
 //refresh token rotation 
 const refresh = async (token) => {
-  if (!token) throw ApiError.unauthorized("Refresh Token Missing");
+  if (!token) {
+    throw ApiError.unauthorized("Refresh Token Missing");
+  }
 
   const decoded = verifyRefreshToken(token);
 
   const user = await User.findById(decoded.id).select("+refreshToken");
-  if (!user) throw ApiError.unauthorized("User not found");
+
+  if (!user) {
+    throw ApiError.unauthorized("User not found");
+  }
 
   if (user.refreshToken !== hashedToken(token)) {
     throw ApiError.unauthorized("Invalid refresh token");
   }
 
-  //generate new asscess and refresh token
-  const accessToken = generateAccessToken({ id: user._id, role: user.role });
-  const refreshToken = generateRefreshToken({ id: user.id });
+  const accessToken = generateAccessToken({
+    id: user._id,
+    role: user.role,
+  });
+
+  const refreshToken = generateRefreshToken({
+    id: user.id,
+  });
 
   user.refreshToken = hashedToken(refreshToken);
-  await user.save({ validateBeforeSave: false }); //save in DB
+
+  await user.save({
+    validateBeforeSave: false,
+  });
 
   const userObj = user.toObject();
+
   delete userObj.password;
   delete userObj.refreshToken;
 
-  return { user: userObj, accessToken, refreshToken };
+  return {
+    user: userObj,
+    accessToken,
+    refreshToken,
+  };
 };
 
 //logout

@@ -123,6 +123,13 @@ const refresh = async (req, res, next) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    res.cookie("accessToken", result.accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
     ApiResponse.ok(res, "Token refreshed", result);
   } catch (error) {
     next(error);
