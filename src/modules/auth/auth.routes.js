@@ -20,7 +20,7 @@ router.post("/login", validate(LoginDto), controller.login);
 
 router.post("/forgot-password", validate(ForgotPasswordDto), controller.forgotPassword);
 
-router.post("/reset-password/:token", validate(ResetPasswordDto), controller.resetPassword);
+router.post("/reset-password", validate(ResetPasswordDto), controller.resetPassword);
 
 router.post("/verify-email/:token", controller.verifyEmail);
 

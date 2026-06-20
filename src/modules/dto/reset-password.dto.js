@@ -3,6 +3,9 @@ import BaseDto from "../../common/dto/base.dto.js";
 
 class ResetPasswordDto extends BaseDto {
     static schema = Joi.object({
+        token: Joi.string().trim().required().messages({
+            "string.empty": "Token is required",
+        }),
         password: Joi.string().trim().min(8).required().messages({
             "string.min": "Password must contain 8 char minimum",
         }),

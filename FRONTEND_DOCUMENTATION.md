@@ -352,21 +352,23 @@ All endpoints use Joi validation. Common validation rules:
 
 #### 6. Reset Password
 - **HTTP Method**: POST
-- **Endpoint URL**: `/auth/reset-password/:token`
+- **Endpoint URL**: `/auth/reset-password`
 - **Module Name**: Auth
 - **Route Description**: Reset password using token
 - **Authentication Required**: No
 - **Authorization Requirements**: None
 - **Required Headers**: `Content-Type: application/json`
-- **Route Parameters**: `token` (string)
+- **Route Parameters**: None
 - **Query Parameters**: None
 - **Request Body Schema**:
   ```json
   {
+    "token": "reset_token_here",
     "password": "newpassword123"
   }
   ```
 - **Validation Rules**:
+  - `token`: Required string
   - `password`: Required, min 8 characters
 - **Success Response Example**:
   ```json
@@ -1766,7 +1768,7 @@ export const login = (data) =&gt; api.post('/auth/login', data);
 export const logout = () =&gt; api.post('/auth/logout');
 export const getMe = () =&gt; api.get('/auth/me');
 export const forgotPassword = (email) =&gt; api.post('/auth/forgot-password', { email });
-export const resetPassword = (token, password) =&gt; api.post(`/auth/reset-password/${token}`, { password });
+export const resetPassword = (token, password) => api.post('/auth/reset-password', { token, password });
 export const verifyEmail = (token) =&gt; api.post(`/auth/verify-email/${token}`);
 export const changePassword = (data) =&gt; api.post('/auth/change-password', data);
 export const refreshToken = () =&gt; api.post('/auth/refresh-token');
